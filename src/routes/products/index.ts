@@ -10,6 +10,10 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", { schema: schema.getProductsSchema }, handler.getProducts);
   fastify.get("/meta", handler.getProductsMeta); // ← harus sebelum /:id
   fastify.get("/overview/stats", handler.getOverviewStats); // ← juga sebelum /:id
+
+  // export route
+  fastify.get("/export", handler.exportProducts);
+
   fastify.get(
     "/:id",
     { schema: schema.getProductByIdSchema },

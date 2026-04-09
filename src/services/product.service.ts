@@ -81,7 +81,11 @@ export function getAll(prisma: PrismaClient, query: ProductQuery = {}) {
       OR: [{ name: { contains: search } }, { sku: { contains: search } }],
     }),
     ...(categoryId && { categoryId }),
-    ...(tab === "out" ? { currentStock: 0 } : statusFilter ? { status: statusFilter } : {}),
+    ...(tab === "out"
+      ? { currentStock: 0 }
+      : statusFilter
+        ? { status: statusFilter }
+        : {}),
     ...(warehouseId && {
       location: {
         warehouseId: Number(warehouseId),
@@ -221,4 +225,57 @@ export async function getOverviewStats(prisma: PrismaClient) {
     recentActivity: activityLogs,
     warehouseZones,
   };
+}
+
+// ─────────────────────────────────────────
+// EXPORT FEATURES
+// ─────────────────────────────────────────
+
+export async function getForExport(
+  prisma: PrismaClient,
+  queryParams: ProductQuery,
+  ids?: number[],
+) {
+  const { search, categoryId, warehouseId, status, tab } = queryParams;
+
+  const where: Prisma.ProductWhereInput = {};
+
+  // Logika 1: Jika ada IDs yang dipilih (Checklist)
+  if (ids && ids.length > 0) {
+    where.id = { in: ids };
+  }
+  // Logika 2: Jika tidak ada checklist, gunakan filter yang sama dengan fungsi getAll
+  else {
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { sku: { contains: search } },
+      ];
+    }
+
+    if (categoryId) {
+      where.categoryId = Number(categoryId);
+    }
+
+    if (warehouseId) {
+      where.location = {
+        warehouseId: Number(warehouseId),
+      };
+    }
+
+    if (tab === "out") {
+      where.currentStock = 0;
+    } else if (tab === "low_stock") {
+      where.status = StockStatus.LOW_STOCK;
+    } else if (status) {
+      where.status = status;
+    }
+  }
+
+  // Ambil semua data tanpa pagination (skip/take)
+  return prisma.product.findMany({
+    where,
+    orderBy: { updatedAt: "desc" },
+    include: productInclude,
+  });
 }

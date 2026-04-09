@@ -6,6 +6,7 @@ import {
   CreateProductInput,
   UpdateProductInput,
 } from "../../services/product.service";
+import ExcelJs from "exceljs";
 
 type IdParam = { id: string };
 type ImageQuery = { isPrimary?: boolean };
@@ -171,14 +172,112 @@ export async function getProductsMeta(
 ) {
   const [categories, warehouses] = await Promise.all([
     req.server.prisma.category.findMany({
-      select: { id: true, name: true }, // 👈 Hanya ambil ID dan Nama
+      select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     req.server.prisma.warehouse.findMany({
-      select: { id: true, name: true }, // 👈 Hindari kolom tanggal yang bermasalah!
+      select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
   ]);
 
   return { categories, warehouses };
+}
+
+export async function exportProducts(
+  req: FastifyRequest<{
+    Querystring: ProductQuery & { ids?: string | string[] };
+  }>,
+  reply: FastifyReply,
+) {
+  const { ids, ...filters } = req.query;
+
+  // konversi Ids ke array
+  let productId: number[] | undefined;
+  if (ids) {
+    productId = Array.isArray(ids) ? ids.map(Number) : [Number(ids)];
+  }
+
+  // mengambil data dari service
+  const products = await productService.getForExport(
+    req.server.prisma,
+    filters,
+    productId,
+  );
+
+  // setup workbook & worksheet
+  const workbook = new ExcelJs.Workbook();
+  const worksheet = workbook.addWorksheet("Inventory");
+
+  // define columns
+  worksheet.columns = [
+    { header: "SKU", key: "sku", width: 15 },
+    { header: "Product Name", key: "name", width: 30 },
+    { header: "Category", key: "category", width: 20 },
+    { header: "Warehouse", key: "warehouse", width: 20 },
+    { header: "Stock", key: "currentStock", width: 10 },
+    { header: "Price", key: "salePrice", width: 15 },
+    { header: "Last Updated", key: "updatedAt", width: 20 },
+  ];
+
+  // mapping data
+  products.forEach((p: any) => {
+    worksheet.addRow({
+      sku: p.sku,
+      name: p.name,
+      category: p.category?.name || "-",
+      warehouse: p.location?.warehouse?.name || "-",
+      currentStock: p.currentStock,
+      salePrice: p.salePrice,
+      // Format: Oct 9, 2026
+      updatedAt: new Date(p.updatedAt).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+    });
+  });
+
+  // styling header
+  worksheet.getRow(1).font = { bold: true };
+
+  // ─── START STYLING ───
+
+  // 1. Styling Header (Baris 1)
+  const headerRow = worksheet.getRow(1);
+  headerRow.font = { bold: true };
+  headerRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "F2F2F2" }, // Warna abu-abu muda
+  };
+
+  // 2. Tambahkan Border ke Semua Cell yang Terisi
+  worksheet.eachRow((row) => {
+    row.eachCell({ includeEmpty: false }, (cell) => {
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+      // Membuat teks di tengah secara vertikal
+      cell.alignment = { vertical: "middle" };
+    });
+  });
+
+  // ─── END STYLING ───
+
+  // generate and send buffer
+  const buffer = await workbook.xlsx.writeBuffer();
+  return reply
+    .header(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    .header(
+      "Content-Disposition",
+      `attachment; filename=inventory_export_${new Date().getTime()}.xlsx`,
+    )
+    .send(buffer);
 }
