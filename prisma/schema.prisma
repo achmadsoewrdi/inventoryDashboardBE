@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ─────────────────────────────────────────
+// WAREHOUSE
+// ─────────────────────────────────────────
+
+model Warehouse {
+  id        Int      @id @default(autoincrement())
+  name      String // e.g. "North Warehouse"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  zones     WarehouseZone[]
+  locations ProductLocation[]
+}
+
+model WarehouseZone {
+  id          Int      @id @default(autoincrement())
+  warehouseId Int
+  name        String // e.g. "Zone A (Ceramics)"
+  percentage  Float    @default(0) // untuk warehouse status chart di admin overview
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+}
+
+// ─────────────────────────────────────────
+// SUPPLIER
+// ─────────────────────────────────────────
+
+model Supplier {
+  id        Int      @id @default(autoincrement())
+  name      String // e.g. "Artisan Clayworks Co."
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+}
+
+// ─────────────────────────────────────────
+// CATEGORY
+// ─────────────────────────────────────────
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String // e.g. "CERAMICS"
+  subCategory String // e.g. "HOME DECOR"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+}
+
+// ─────────────────────────────────────────
+// PRODUCT
+// ─────────────────────────────────────────
+
+model Product {
+  id          Int     @id @default(autoincrement())
+  name        String
+  sku         String  @unique // e.g. "ART-7729-CV"
+  description String? @db.Text
+
+  // Harga
+  basePrice Float @default(0)
+  salePrice Float @default(0)
+
+  // Stok
+  currentStock   Int         @default(0)
+  stockThreshold Int         @default(10) // batas low stock
+  status         StockStatus @default(IN_STOCK)
+
+  // Relasi
+  categoryId Int
+  supplierId Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category     Category         @relation(fields: [categoryId], references: [id])
+  supplier     Supplier         @relation(fields: [supplierId], references: [id])
+  images       ProductImage[]
+  location     ProductLocation?
+  activityLogs ActivityLog[]
+}
+
+// ─────────────────────────────────────────
+// PRODUCT IMAGE
+// ─────────────────────────────────────────
+
+model ProductImage {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  url       String
+  isPrimary Boolean  @default(false) // primary product image
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────
+// PRODUCT LOCATION (aisle, bin/shelf, warehouse)
+// ─────────────────────────────────────────
+
+model ProductLocation {
+  id          Int      @id @default(autoincrement())
+  productId   Int      @unique
+  warehouseId Int
+  aisle       String // e.g. "Aisle 4"
+  shelf       String // e.g. "Shelf B" | "Bin 9" | "Rack 4"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+}
+
+// ─────────────────────────────────────────
+// ACTIVITY LOG (untuk Recent Activity di admin overview)
+// ─────────────────────────────────────────
+
+model ActivityLog {
+  id          Int            @id @default(autoincrement())
+  productId   Int?
+  userId      Int?
+  action      ActivityAction
+  description String // e.g. "adjusted stock levels for Handcrafted Ceramic Vase"
+  delta       Int? // e.g. +31 units
+  status      String? // e.g. "Pending Shipment"
+  createdAt   DateTime       @default(now())
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+// ─────────────────────────────────────────
+// USER (admin)
+// ─────────────────────────────────────────
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  avatar    String?
+  role      UserRole @default(ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activityLogs ActivityLog[]
+}
+
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
+enum StockStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+}
+
+enum ActivityAction {
+  STOCK_ADJUSTED
+  PRODUCT_ADDED
+  PRODUCT_UPDATED
+  ORDER_MARKED
+  LOCATION_UPDATED
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
