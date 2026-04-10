@@ -1,4 +1,8 @@
-import fastify, { FastifyInstance } from "fastify";
+import fastify, {
+  FastifyInstance,
+  FastifyRequest,
+  FastifyReply,
+} from "fastify";
 import prismaPlugin from "./plugin/prisma";
 import sensible from "@fastify/sensible";
 import productRoutes from "./routes/products/index";
@@ -10,34 +14,45 @@ import fastifyCors from "@fastify/cors";
 import { categoryRoutes } from "./routes/categories";
 import fastifyJwt from "@fastify/jwt";
 import authRoutes from "./routes/auth/index";
+import activityRoutes from "./routes/activity";
+// import dashboardRoutes from "./routes/dashboard"; // Pastikan file index.ts dashboard sudah ada
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify();
 
+  // 1. Core Plugins & Auth
   app.register(prismaPlugin);
 
   app.register(fastifyJwt, {
     secret: process.env.JWT_SECRET ?? "changeme",
   });
 
+  // [PENTING] Daftarkan Decorator authenticate SEBELUM registrasi rute
+  // Ini untuk memperbaiki error "preHandler got [object Undefined]"
+  app.decorate(
+    "authenticate",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch (err) {
+        reply.send(err);
+      }
+    },
+  );
+
+  // 2. Utility Plugins
   app.register(sensible);
   app.register(multipart);
 
-  // Gunakan process.cwd() agar path selalu relatif ke root project
-  // (lebih reliable daripada __dirname saat pakai tsx)
+  // Konfigurasi Upload Directory
   const uploadsDir = path.join(process.cwd(), "public", "uploads");
-
-  // Pastikan folder ada
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  console.log("Static files dir:", uploadsDir);
-  console.log("Files:", fs.readdirSync(uploadsDir));
-
   app.register(staticFiles, {
     root: uploadsDir,
-    prefix: "/uploads/", // <- trailing slash penting!
+    prefix: "/uploads/",
     decorateReply: false,
   });
 
@@ -46,8 +61,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   });
 
+  // 3. Register All Routes
+  // Semua rute yang menggunakan preHandler: [fastify.authenticate] harus di bawah decorate
+  app.register(authRoutes, { prefix: "/auth" });
   app.register(productRoutes, { prefix: "/products" });
   app.register(categoryRoutes, { prefix: "/categories" });
-  app.register(authRoutes, { prefix: "/auth" });
+  app.register(activityRoutes, { prefix: "/activity" });
+  // app.register(dashboardRoutes, { prefix: "/dashboard" }); // Daftarkan dashboard di sini
+
   return app;
 }
