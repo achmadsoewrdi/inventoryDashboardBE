@@ -150,7 +150,7 @@ model User {
   email     String   @unique
   password  String
   avatar    String?
-  role      UserRole @default(ADMIN)
+  role      UserRole @default(STAFF)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

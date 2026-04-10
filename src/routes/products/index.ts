@@ -2,14 +2,16 @@ import { FastifyPluginAsync } from "fastify";
 import * as handler from "./handler";
 import * as schema from "./schema";
 import { authenticate } from "../../middleware/authenticate";
+import { authorizeAdmin } from "../../middleware/authorize"; // <--- 1. Tambahkan import ini
 
 const productRoutes: FastifyPluginAsync = async (fastify) => {
-  // wajib login
+  // wajib login (berlaku untuk semua rute)
   fastify.addHook("preHandler", authenticate);
+
   // ─── Products CRUD ───
   fastify.get("/", { schema: schema.getProductsSchema }, handler.getProducts);
-  fastify.get("/meta", handler.getProductsMeta); // ← harus sebelum /:id
-  fastify.get("/overview/stats", handler.getOverviewStats); // ← juga sebelum /:id
+  fastify.get("/meta", handler.getProductsMeta);
+  fastify.get("/overview/stats", handler.getOverviewStats);
 
   // export route
   fastify.get("/export", handler.exportProducts);
@@ -29,7 +31,12 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
     { schema: schema.updateProductSchema },
     handler.updateProduct,
   );
-  fastify.delete("/:id", handler.deleteProduct);
+
+  fastify.delete<{ Params: { id: string } }>(
+    "/:id",
+    { preHandler: [authorizeAdmin] },
+    handler.deleteProduct,
+  );
 
   // ─── Images ───
   fastify.post(
@@ -37,7 +44,12 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
     { schema: schema.uploadImageSchema },
     handler.uploadImage,
   );
-  fastify.delete("/:id/images/:imageId", handler.deleteImage);
+
+  fastify.delete<{ Params: { id: string; imageId: string } }>(
+    "/:id/images/:imageId",
+    { preHandler: [authorizeAdmin] },
+    handler.deleteImage,
+  );
 };
 
 export default productRoutes;
