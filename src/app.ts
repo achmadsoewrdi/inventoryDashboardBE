@@ -15,6 +15,7 @@ import { categoryRoutes } from "./routes/categories";
 import fastifyJwt from "@fastify/jwt";
 import authRoutes from "./routes/auth/index";
 import activityRoutes from "./routes/activity";
+import supplierRoutes from "./routes/suppliers";
 // import dashboardRoutes from "./routes/dashboard"; // Pastikan file index.ts dashboard sudah ada
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -67,6 +68,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.register(productRoutes, { prefix: "/products" });
   app.register(categoryRoutes, { prefix: "/categories" });
   app.register(activityRoutes, { prefix: "/activity" });
+  app.register(supplierRoutes, { prefix: "/suppliers" });
   // app.register(dashboardRoutes, { prefix: "/dashboard" }); // Daftarkan dashboard di sini
 
   return app;
