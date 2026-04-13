@@ -1,23 +1,21 @@
-import fp from 'fastify-plugin'
-import { FastifyPluginAsync } from 'fastify'
-import { PrismaClient } from '@prisma/client'
-import { PrismaMariaDb } from '@prisma/adapter-mariadb'
+import fp from "fastify-plugin";
+import { FastifyPluginAsync } from "fastify";
+import { PrismaClient } from "@prisma/client";
 
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyInstance {
-    prisma: PrismaClient
+    prisma: PrismaClient;
   }
 }
 
 const prismaPlugin: FastifyPluginAsync = fp(async (fastify) => {
-  const adapter = new PrismaMariaDb(process.env.DATABASE_URL!)
-  const prisma = new PrismaClient({ adapter })  
+  const prisma = new PrismaClient();
 
-  fastify.decorate('prisma', prisma)
+  fastify.decorate("prisma", prisma);
 
-  fastify.addHook('onClose', async (server) => {
-    await server.prisma.$disconnect()
-  })
-})
+  fastify.addHook("onClose", async (server) => {
+    await server.prisma.$disconnect();
+  });
+});
 
-export default prismaPlugin
+export default prismaPlugin;
